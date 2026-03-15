@@ -33,6 +33,7 @@ qt_add_qml_module(appadmtelekomwv
         SOURCES vlcplayer.h
         SOURCES vlcplayer.cpp
         SOURCES frameworker.h
+        SOURCES thumbnailprovider.h thumbnailprovider.cpp
 
 )
 

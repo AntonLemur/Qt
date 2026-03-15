@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 // #include <QtWebView>
+#include "thumbnailprovider.h"
 
 int main(int argc, char *argv[])
 {
@@ -25,6 +26,10 @@ int main(int argc, char *argv[])
     //     );
 
     QQmlApplicationEngine engine;
+
+    // Регистрация: "thumb" — это имя провайдера
+    engine.addImageProvider(QLatin1String("thumb"), new ThumbnailProvider);
+
     QObject::connect(
         &engine,
         &QQmlApplicationEngine::objectCreationFailed,

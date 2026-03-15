@@ -49,6 +49,26 @@ ApplicationWindow  {
                     Text { anchors.centerIn: parent; text: "Мой двор"; font.pointSize: 24 }
                 }
 
+                RowLayout {
+                     id: topToolbar
+                     Layout.fillWidth: true
+                     Layout.preferredHeight: 20
+                     spacing: 10
+                     Button {
+                         id: archiveButton
+                         Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
+                         text: "Архив"
+                         onClicked: {
+                             stackView.push(archivePage)
+                         }
+                     }
+                     Item {
+                         id: archivename
+                         Layout.fillWidth: true
+                         Layout.fillHeight: true
+                     }
+                }
+
                 Rectangle
                 {
                     Layout.fillWidth: true
@@ -275,6 +295,87 @@ ApplicationWindow  {
                             Layout.alignment: Qt.AlignVCenter
                             font: customButton.font
                             color: customButton.color // Adjust color based on button state (e.g. hovered, pressed)
+                        }
+                    }
+                    onClicked: {
+                        // Pop the current page off the stack
+                        stackView.pop()
+                    }
+                }
+            }
+        }
+    }
+
+    // Page 3: Archive Page
+    Component {
+        id: archivePage
+        Page {
+            title: "Движения"
+
+            ColumnLayout {
+                anchors.fill: parent
+                ListView {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 5 // Add spacing between items
+                    model: ListModel {
+                        id: pathModel
+
+                        ListElement {
+                            filePath: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                        }
+                        ListElement {
+                            filePath: "https://stream.mux.com/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8"
+                        }
+                        ListElement {
+                            filePath: "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        }
+                    }// Источник путей к файлам
+
+                    delegate: Row {
+                                    spacing: 10
+                                    Image {
+                                        width: 160; height: 90
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+
+                                        // Формируем путь: префикс + путь к файлу
+                                        source: "image://thumb/" + filePath
+
+                                        // Опционально: пока грузится превью, покажем серый фон
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            color: "#333"
+                                            visible: parent.status != Image.Ready
+                                        }
+                                    }
+
+                                    // Text element bound to the 'filePath' role
+                                    // Text {
+                                    //     text: filePath
+                                    //     font.pixelSize: 18
+                                    //     anchors.verticalCenter: parent.verticalCenter
+                                    // }
+                                }
+                }
+
+                Button {
+                    id: archivecustomButton
+                    text: "Перейти в Мой двор"
+                    contentItem:  ColumnLayout {
+                        spacing: 10 // Space between the icon and the text
+
+                        Image {
+                            source: "qrc:/images/cam.png"
+                            fillMode: Image.PreserveAspectFit // Картинка впишется, без обрезки
+                            anchors.centerIn: parent
+                        }
+                        Label {
+                            id: archivetextLabel
+                            text: archivecustomButton.text // Bind the Label's text to the Button's text property
+                            Layout.alignment: Qt.AlignVCenter
+                            font: archivecustomButton.font
+                            color: archivecustomButton.color // Adjust color based on button state (e.g. hovered, pressed)
                         }
                     }
                     onClicked: {

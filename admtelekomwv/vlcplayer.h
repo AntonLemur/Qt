@@ -31,6 +31,7 @@ class VLCPlayer : public QObject {
     Q_PROPERTY(u_int64_t duration READ duration NOTIFY durationChanged)
 public:
     VLCPlayer();
+    ~VLCPlayer();
 
    // 1. LOCK: VLC asks where to write the pixels of the next frame
    static void* lock(void *opaque, void **planes);
@@ -43,6 +44,12 @@ public:
 
    // 4. Ловим события VLC
    static void vlc_callback(const libvlc_event_t *event, void *data);
+
+   static unsigned setupFormat(void **opaque, char *chroma,
+                                   unsigned *width, unsigned *height,
+                                   unsigned *pitches, unsigned *lines);
+
+   static void cleanupFormat(void *opaque);
 
    QVideoSink *videoSink() const;
    void setVideoSink(QVideoSink *newVideoSink);
@@ -78,8 +85,12 @@ private:
     libvlc_media_player_t *_vlcPlayer;
     QPointer<QVideoSink> m_videoSink;
     bool m_bplaybackState = false;
-    QVideoFrame m_currentFrame;
+    // QVideoFrame m_currentFrame;
     QVideoFrameFormat m_format; // Инициализируйте один раз (VIDEO_WIDTH, VIDEO_HEIGHT, RGBA8888)
+    QVideoFrame m_frames[3]; // Три буфера для плавной работы
+    int m_currentFrameIdx = 0;
+    QMutex m_frameMutex;     // Для синхронизации доступа
+
 };
 
 #endif // VLCPLAYER_H
