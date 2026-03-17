@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 // #include <QtWebView>
 #include "thumbnailprovider.h"
 
@@ -37,6 +38,21 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
     engine.loadFromModule("admtelekomwv", "Main");
+
+    // Проверяем, что загрузка прошла успешно
+    if (engine.rootObjects().isEmpty())
+        return -1;
+
+    // Ищем объект во всем дереве загруженного QML
+    QObject *root = engine.rootObjects().first();
+    QObject *myTarget = root->findChild<QObject*>("VLCPlayer");
+
+    if (myTarget) {
+        // Делаем его доступным во всем QML под именем "globalVLCPlayer"
+        engine.rootContext()->setContextProperty("globalVLCPlayer", myTarget);
+    } else {
+        qWarning() << "Не удалось найти объект с objectName: VLCPlayer";
+    }
 
     return app.exec();
 }

@@ -1,17 +1,26 @@
+#include "vlcmanager.h"
 #include "thumbnailprovider.h"
 #include <QThread>
 #include <QTimer>
 
-ThumbnailProvider::ThumbnailProvider(): QQuickImageProvider(QQuickImageProvider::Image) {}
+ThumbnailProvider::ThumbnailProvider(): QQuickImageProvider(QQuickImageProvider::Image){}
 
 QImage ThumbnailProvider::getVlcThumbnail(QString videoPath, QString tempPath)
 {
     const int width = 640;  // Фиксируем размер превью для скорости
     const int height = 360;
 
-    const char *vlc_args[] = { "--no-audio", "--no-video-title-show", "--avcodec-hw=none" };
-    libvlc_instance_t *vlc = libvlc_new(3, vlc_args);
+    // const char *vlc_args[] = { "--no-audio", "--no-video-title-show", "--avcodec-hw=none" };
+    libvlc_instance_t *vlc = VlcManager::instance();//libvlc_new(3, vlc_args);
     libvlc_media_t *m = libvlc_media_new_location(vlc, videoPath.toUtf8().constData());
+
+    libvlc_media_add_option(m, ":no-audio");
+    libvlc_media_add_option(m, ":no-video-title-show");
+    libvlc_media_add_option(m, ":avcodec-hw=none");
+    // libvlc_media_add_option(m, ":network-caching=3000"); // 3 секунды буфера для сети
+    libvlc_media_add_option(m, ":no-hw-dec");
+    libvlc_media_add_option(m, ":vout=vmem");
+
     libvlc_media_player_t *mp = libvlc_media_player_new_from_media(m);
 
     // Подготовка буфера (RGBA: 4 байта на пиксель)
@@ -25,9 +34,18 @@ QImage ThumbnailProvider::getVlcThumbnail(QString videoPath, QString tempPath)
 
     libvlc_media_player_play(mp);
 
+    if(videoPath.right(4)==".mp4")
+    {
+        // Даем немного времени на инициализацию и прыгаем на 1-ю секунду или 5% видео
+        QThread::msleep(100);
+        libvlc_media_player_set_time(mp, 2000); // 1000 мс = 1 секунда
+    }
+
     // Ждем кадра 15 секунд (для сети)
     QTimer::singleShot(15000, &loop, &QEventLoop::quit);
     loop.exec();
+
+    qDebug() << videoPath.right(4) << ", frame captured:" << ctx.frameCaptured;
 
     libvlc_media_player_stop(mp);
 
@@ -39,7 +57,7 @@ QImage ThumbnailProvider::getVlcThumbnail(QString videoPath, QString tempPath)
 
     libvlc_media_player_release(mp);
     libvlc_media_release(m);
-    libvlc_release(vlc);
+    // libvlc_release(vlc);
 
     return result;
 }
@@ -48,8 +66,6 @@ QImage ThumbnailProvider::requestImage(const QString &id, QSize *size, const QSi
 {
     QString videoPath = id; // Например, "C:/Videos/movie.mp4"
     QString tempImg = QDir::tempPath() + "/thumb_" + QString::number(qHash(videoPath)) + ".png";
-
-    qDebug() << "videoPath: " << videoPath << ", tempImg: " << tempImg;
 
     QImage thumb = getVlcThumbnail(videoPath, tempImg);
 

@@ -40,8 +40,19 @@ ApplicationWindow  {
         Page {
             title: "Мой двор"
             ColumnLayout {
+                id: rootLayout
                 anchors.fill: parent
                 spacing: 0
+
+                property string thumbSource: "" // Изначально пусто
+                property bool checkingUrl: true // Флаг для начальной проверки
+                // 1. Определение собственного сигнала
+                signal setsource(string url)
+                // 3. Обработка сигнала
+                onSetsource: (url) => {
+                    vlcplayer.setSource(url)
+                }
+
 
                 Rectangle {
                     Layout.fillWidth: true
@@ -74,32 +85,10 @@ ApplicationWindow  {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 200
 
-                    // Предполагается, что FrameProvider зарегистрирован как "com.myapp 1.0 FrameProvider"
-                    // HttpReader {
-                    //     id: provider
-                    //     videoSink: videoOutput.videoSink
-                    // }
-
-                    // MediaPlayer {
-                    //     id: mediaPlayer
-
-                    //     // source:
-                    //         // "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-                    //         // "rtsp://xxx.xxx.xxx.xxx:xxxx/mystream" //"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-                    //         // "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    //     // videoOutput: videoOutput
-                    //     audioOutput: AudioOutput {} // Необходимо для звука
-
-                    //     onErrorOccurred: {
-                    //         console.error("source: ", mediaPlayer.source);
-                    //         console.error("MediaPlayer error:", mediaPlayer.error, mediaPlayer.errorString);
-                    //     }
-                    // }
-
+                    // 1. Компонент видео
                     VLCPlayer {
-                        id: vlcplayer
-                        // anchors.fill: parent
-                        // source: "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        id: vlcplayer // для использования внутри этой ветки
+                        objectName: "VLCPlayer" // для поиска из C++, а потом использования в других ветках
                         videoSink: videoOutput.videoSink
                     }
 
@@ -110,13 +99,6 @@ ApplicationWindow  {
 
                         MouseArea {
                             anchors.fill: parent
-                            //для MediaPlayer
-                            // onClicked: {
-                            //     if (mediaPlayer.playbackState === MediaPlayer.PlayingState)
-                            //         mediaPlayer.pause();
-                            //     else
-                            //         mediaPlayer.play();
-                            // }
 
                             onClicked: {
                                 if (vlcplayer.playbackState)
@@ -124,6 +106,38 @@ ApplicationWindow  {
                                 else
                                     vlcplayer.play();
                             }
+                        }
+                    }
+
+                    // 2. Элемент миниатюры
+                    Image {
+                        id: thumbnail
+                        anchors.fill: parent
+                        source: { //"image://thumb/" + vlcplayer.streampath // Путь к вашей картинке
+                            if(!vlcplayer.playbackState)
+                                return rootLayout.thumbSource;
+                            else {
+                                rootLayout.thumbSource=""
+                                return rootLayout.thumbSource
+                            }
+                        }
+                        fillMode: Image.PreserveAspectFit
+                        visible: !vlcplayer.playbackState // По умолчанию показываем
+                        asynchronous: true
+
+                        // Скрывать при клике
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                parent.visible = false;
+                                vlcplayer.play();
+                            }
+                        }
+
+                        // Индикатор загрузки, пока идет проверка или генерация
+                        BusyIndicator {
+                            anchors.centerIn: parent
+                            running: (thumbnail.status === Image.Loading) || (rootLayout.checkingUrl === true)
                         }
                     }
                }
@@ -136,7 +150,7 @@ ApplicationWindow  {
 
                    PlaybackSeekControl {
                         id: seeker
-                        mediaPlayer: vlcplayer //mediaPlayer
+                        mediaPlayer: vlcplayer
 
                         fullScreenButton.onClicked: {
                             if (mediaPlayer.hasVideo) {
@@ -156,42 +170,7 @@ ApplicationWindow  {
 
                    PlaybackControl {
                         id: playbackControl
-                        mediaPlayer: vlcplayer //mediaPlayer
-
-                        // isPlaylistVisible: playlistInfo.visible
-
-                        // onPlayNextFile: {
-                        //     if (playlistInfo.mediaCount) {
-                        //         if (!playlistInfo.isShuffled){
-                        //             ++root.currentFile
-                        //             if (root.currentFile > playlistInfo.mediaCount - 1 && root.playlistLooped) {
-                        //                 root.currentFile = 0
-                        //             } else if (root.currentFile > playlistInfo.mediaCount - 1 && !root.playlistLooped) {
-                        //                 --root.currentFile
-                        //                 return
-                        //             }
-                        //         }
-                        //         root.playMedia()
-                        //     }
-                        // }
-
-                        // onPlayPreviousFile: {
-                        //     if (playlistInfo.mediaCount) {
-                        //         if (!playlistInfo.isShuffled){
-                        //             --root.currentFile
-                        //             if (root.currentFile < 0 && isPlaylistLooped) {
-                        //                 root.currentFile = playlistInfo.mediaCount - 1
-                        //             } else if (root.currentFile < 0 && !root.playlistLooped) {
-                        //                 ++root.currentFile
-                        //                 return
-                        //             }
-                        //         }
-                        //         root.playMedia()
-                        //     }
-                        // }
-
-                        // playlistButton.onClicked: !playlistInfo.visible ? root.showOverlay(playlistInfo) : root.closeOverlays()
-                        // menuButton.onClicked: menuPopup.open()
+                        mediaPlayer: vlcplayer
                     }
                }
 
@@ -231,15 +210,36 @@ ApplicationWindow  {
                     }
                }
 
-                // Component.onCompleted: mediaPlayer.play()
-                // Component.onCompleted: provider.makeHttpRequest(
-                //     "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")
-                Component.onCompleted: vlcplayer.setSource(
-                    // "rtsp://xxx.xxx.xxx.xxx:xxxx/mystream"
-                    // "https://stream.mux.com/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8"
-                    // "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                    "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-                    )
+                Component.onCompleted: {
+                    checkUrl(vlcplayer.streampath)
+                    // vlcplayer.setSource(
+                    //     // "rtsp://xxx.xxx.xxx.xxx:xxxx/mystream"
+                    //     // "https://stream.mux.com/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8"
+                    //     // "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                    //     // "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+                    // )
+                }
+
+                function checkUrl(url) {
+                    rootLayout.checkingUrl = true;
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("GET", url);
+                    xhr.setRequestHeader("Range", "bytes=0-10"); // Минимум данных
+
+                    xhr.onreadystatechange = function() {
+                        if (xhr.readyState === XMLHttpRequest.DONE) {
+                            rootLayout.checkingUrl = false; // ОСТАНАВЛИВАЕМ ИНДИКАТОР
+                            if (xhr.status === 200 || xhr.status === 206) {
+                                rootLayout.thumbSource = "image://thumb/" + url;
+                                rootLayout.setsource(vlcplayer.streampath);
+                            } else {
+                                console.log("Ошибка! Статус 0 означает блок сети или CORS");
+                                rootLayout.thumbSource = "qrc:/images/error-icon.png"; // Заглушка
+                            }
+                        }
+                    };
+                    xhr.send();
+                }
             }
         }
     }
@@ -334,10 +334,12 @@ ApplicationWindow  {
 
                     delegate: Row {
                                     spacing: 10
+
                                     Image {
                                         width: 160; height: 90
                                         fillMode: Image.PreserveAspectCrop
                                         asynchronous: true
+                                        cache: false
 
                                         // Формируем путь: префикс + путь к файлу
                                         source: "image://thumb/" + filePath
@@ -347,6 +349,29 @@ ApplicationWindow  {
                                             anchors.fill: parent
                                             color: "#333"
                                             visible: parent.status != Image.Ready
+                                        }
+
+                                        // запускать воспроизведение
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            Timer {
+                                                id: myTimer
+                                                interval: 50
+                                                onTriggered: {
+                                                    globalVLCPlayer.play();
+                                                    stackView.pop();
+                                                }
+                                            }
+
+                                            onClicked: {
+                                                // 1. Сначала меняем данные
+                                                globalVLCPlayer.stop()
+                                                globalVLCPlayer.setSource(filePath);
+
+                                                // 2. Делаем небольшую задержку перед переходом,
+                                                // чтобы ImageProvider-ы успели отработать или закрыться
+                                                myTimer.start()
+                                            }
                                         }
                                     }
 

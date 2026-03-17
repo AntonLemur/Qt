@@ -15,6 +15,7 @@ struct Context {
 
 class ThumbnailProvider : public QQuickImageProvider
 {
+    Q_OBJECT
 public:
     ThumbnailProvider();
 

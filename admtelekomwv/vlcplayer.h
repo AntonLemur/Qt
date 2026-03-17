@@ -29,6 +29,7 @@ class VLCPlayer : public QObject {
     Q_PROPERTY(u_int64_t position READ position NOTIFY positionChanged) //в мс
     Q_PROPERTY(bool seekable READ seekable NOTIFY seekableChanged)
     Q_PROPERTY(u_int64_t duration READ duration NOTIFY durationChanged)
+    Q_PROPERTY(QString streampath READ streampath NOTIFY streampathChanged)
 public:
     VLCPlayer();
     ~VLCPlayer();
@@ -64,6 +65,7 @@ public:
    u_int64_t position() const;
    bool seekable() const;
    u_int64_t duration() const;
+   QString streampath() const;
 
     // Video settings (can be changed)
     const int VIDEO_WIDTH = 1280;
@@ -79,6 +81,7 @@ signals:
     void positionChanged();
     void seekableChanged();
     void durationChanged();
+    void streampathChanged();
 
 private:
     libvlc_instance_t *_vlcInstance;
@@ -90,6 +93,7 @@ private:
     QVideoFrame m_frames[3]; // Три буфера для плавной работы
     int m_currentFrameIdx = 0;
     QMutex m_frameMutex;     // Для синхронизации доступа
+    QString m_streampath;
 
 };
 

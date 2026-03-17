@@ -6,7 +6,9 @@
 #include <QVideoFrame>
 #include <QDebug>
 
-VLCPlayer::VLCPlayer(): m_format(QSize(VIDEO_WIDTH, VIDEO_HEIGHT), QVideoFrameFormat::Format_RGBA8888) {
+VLCPlayer::VLCPlayer(): m_format(QSize(VIDEO_WIDTH, VIDEO_HEIGHT), QVideoFrameFormat::Format_RGBA8888),
+    m_streampath("rtsp://xxx.xxx.xxx.xxx:xxxx/mystream")
+{
     videoBuffer.resize(VIDEO_WIDTH * VIDEO_HEIGHT * 4); // RGBA
     // const char * const vlc_args[] = {
     //     "--network-caching=300",       // Базовый кэш сети (300 мс)
@@ -296,4 +298,9 @@ void VLCPlayer::cleanupFormat(void *opaque)
 {
     // Здесь можно освободить ресурсы, если вы выделяли их специально под формат
     qDebug() << "VLC Cleanup Format";
+}
+
+QString VLCPlayer::streampath() const
+{
+    return m_streampath;
 }
