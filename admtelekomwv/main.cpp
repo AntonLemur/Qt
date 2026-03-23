@@ -3,6 +3,7 @@
 #include <QQmlContext>
 // #include <QtWebView>
 #include "thumbnailprovider.h"
+#include <asyncImageprovider.h>
 
 int main(int argc, char *argv[])
 {
@@ -29,7 +30,10 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
 
     // Регистрация: "thumb" — это имя провайдера
-    engine.addImageProvider(QLatin1String("thumb"), new ThumbnailProvider);
+    // engine.addImageProvider(QLatin1String("thumb"), new ThumbnailProvider);
+
+    // Регистрация: "async_provider" — это имя провайдера
+    engine.addImageProvider("async_provider", new AsyncImageProvider);
 
     QObject::connect(
         &engine,

@@ -28,13 +28,17 @@ qt_add_qml_module(appadmtelekomwv
         RESOURCES
         RESOURCES qml.qrc
         SOURCES
-        SOURCES httpreader.h
-        SOURCES httpreader.cpp
+        SOURCES
+        SOURCES
         SOURCES vlcplayer.h
         SOURCES vlcplayer.cpp
-        SOURCES frameworker.h
-        SOURCES thumbnailprovider.h thumbnailprovider.cpp
+        SOURCES
+        SOURCES
         SOURCES vlcmanager.h
+        SOURCES networkchecker.h
+        SOURCES imageresponse.h
+        SOURCES imageresponse.cpp
+        SOURCES asyncImageprovider.h
 
 )
 

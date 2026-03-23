@@ -119,8 +119,27 @@ void VLCPlayer::setSource(const QString &path) {
         libvlc_media_add_option(m, ":network-caching=1000"); // Увеличьте кэш для HTTP
     } else {
         // Ваши старые опции для RTSP
-        libvlc_media_add_option(m, ":rtsp-tcp=0");
+        // libvlc_media_add_option(m, ":rtsp-tcp=0");
+        // libvlc_media_add_option(m, ":network-caching=150");
+
+        // 1. Минимальный буфер (по умолчанию он 1000-3000 мс)
         libvlc_media_add_option(m, ":network-caching=150");
+
+        // 2. Форсируем использование TCP (UDP часто вызывает артефакты и задержки из-за потерь)
+        libvlc_media_add_option(m, ":rtsp-tcp");
+
+        // 3. Отключаем джиттер-буфер (важно для RTSP)
+        libvlc_media_add_option(m, ":clock-jitter=0");
+
+        // 4. Отключаем синхронизацию аудио (если аудио не нужно, это сильно ускоряет видео)
+        libvlc_media_add_option(m, ":no-audio");
+
+        // 5. Ускоряем декодирование (пропуск "опоздавших" кадров)
+        libvlc_media_add_option(m, ":avcodec-skip-frame=1"); // 1 = skip non-ref, 2 = skip non-key, 4 = skip all
+        libvlc_media_add_option(m, ":avcodec-hurry-up");
+
+        //В некоторых версиях VLC помогает добавление опции, которая заставляет плеер "выбрасывать" старые кадры, если он не успевает
+        // libvlc_media_add_option(m, ":clock-synchro=0");
     }
 
     libvlc_media_player_set_media(_vlcPlayer, m);

@@ -90,6 +90,13 @@ ApplicationWindow  {
                         id: vlcplayer // для использования внутри этой ветки
                         objectName: "VLCPlayer" // для поиска из C++, а потом использования в других ветках
                         videoSink: videoOutput.videoSink
+                        onPlaybackStateChanged:{
+
+                            console.log("onPlaybackState, rootLayout.checkingUrl=",rootLayout.checkingUrl)
+
+                            if(!rootLayout.checkingUrl)
+                                rootLayout.checkingUrl=true
+                        }
                     }
 
                     VideoOutput {
@@ -101,6 +108,7 @@ ApplicationWindow  {
                             anchors.fill: parent
 
                             onClicked: {
+
                                 if (vlcplayer.playbackState)
                                     vlcplayer.pause();
                                 else
@@ -113,16 +121,17 @@ ApplicationWindow  {
                     Image {
                         id: thumbnail
                         anchors.fill: parent
-                        source: { //"image://thumb/" + vlcplayer.streampath // Путь к вашей картинке
-                            if(!vlcplayer.playbackState)
-                                return rootLayout.thumbSource;
-                            else {
-                                rootLayout.thumbSource=""
-                                return rootLayout.thumbSource
-                            }
-                        }
+                        source: rootLayout.thumbSource //"image://thumb/" + vlcplayer.streampath // Путь к вашей картинке
+                        // {
+                        //     if(!vlcplayer.playbackState)
+                        //         return rootLayout.thumbSource;
+                        //     else {
+                        //         rootLayout.thumbSource=""
+                        //         return rootLayout.thumbSource
+                        //     }
+                        // }
                         fillMode: Image.PreserveAspectFit
-                        visible: !vlcplayer.playbackState // По умолчанию показываем
+                        visible: !vlcplayer.playbackState && !rootLayout.checkingUrl
                         asynchronous: true
 
                         // Скрывать при клике
@@ -210,8 +219,24 @@ ApplicationWindow  {
                     }
                }
 
+                property string ip: ""
+                property int port: 0
+                property string protocol: ""
+
                 Component.onCompleted: {
-                    checkUrl(vlcplayer.streampath)
+                    let url = new URL(vlcplayer.streampath);
+                    ip=url.hostname;
+                    port=parseInt(url.port, 10);
+                    protocol=url.protocol;
+
+                    console.log("IP/Хост:", ip);
+                    console.log("Порт:", port);
+                    console.log("Протокол:", protocol);
+
+                    if(protocol === "rtsp:")
+                        netChecker.checkPort(ip, port);
+                    else
+                        checkUrl(vlcplayer.streampath);
                     // vlcplayer.setSource(
                     //     // "rtsp://xxx.xxx.xxx.xxx:xxxx/mystream"
                     //     // "https://stream.mux.com/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8"
@@ -220,21 +245,67 @@ ApplicationWindow  {
                     // )
                 }
 
+                // Компонент таймера для периодической проверки URL
+                Timer {
+                    id: timercheckUrl
+                    interval: 5000 // 5 секунд
+                    running: !vlcplayer.playbackState && !rootLayout.checkingUrl //false
+                    repeat: true
+                    triggeredOnStart: true // Запустить сразу при старте
+                    property int mode: 0 // Переменная состояния
+                    onTriggered: {
+                        if(mode === 0)
+                            netChecker.checkPort(rootLayout.ip, rootLayout.port);
+                        else
+                            rootLayout.checkUrl(vlcplayer.streampath);
+                    }
+                }
+
+                NetworkChecker {
+                    id: netChecker
+
+                    // Обработка результата проверки
+                    onPortStatus: (host, isAvailable) => {
+                        if (isAvailable) {
+                            console.log("Камера " + host + " доступна (порт 8554 открыт)");
+                            rootLayout.thumbSource = "image://async_provider/" + vlcplayer.streampath //"image://thumb/" + vlcplayer.streampath;
+                            rootLayout.setsource(vlcplayer.streampath);
+                            timercheckUrl.stop()
+                        } else {
+                          if(rootLayout.checkingUrl)
+                          {
+                            console.log("Камера " + host + " НЕ отвечает");
+                            rootLayout.thumbSource = "qrc:/images/error-icon.png"; // Заглушка
+                            timercheckUrl.mode = 0;
+                            // timercheckUrl.start()
+                            rootLayout.checkingUrl = false
+                          }
+                        }
+                    }
+                }
+
                 function checkUrl(url) {
-                    rootLayout.checkingUrl = true;
+                    //rootLayout.checkingUrl = true;
                     var xhr = new XMLHttpRequest();
                     xhr.open("GET", url);
                     xhr.setRequestHeader("Range", "bytes=0-10"); // Минимум данных
 
                     xhr.onreadystatechange = function() {
                         if (xhr.readyState === XMLHttpRequest.DONE) {
-                            rootLayout.checkingUrl = false; // ОСТАНАВЛИВАЕМ ИНДИКАТОР
+                            // rootLayout.checkingUrl = false; // ОСТАНАВЛИВАЕМ ИНДИКАТОР
                             if (xhr.status === 200 || xhr.status === 206) {
-                                rootLayout.thumbSource = "image://thumb/" + url;
+                                rootLayout.thumbSource = "image://async_provider/" + url //"image://thumb/" + url;
                                 rootLayout.setsource(vlcplayer.streampath);
+                                timercheckUrl.stop()
                             } else {
-                                console.log("Ошибка! Статус 0 означает блок сети или CORS");
-                                rootLayout.thumbSource = "qrc:/images/error-icon.png"; // Заглушка
+                                if(rootLayout.checkingUrl)
+                                {
+                                    console.log("Ошибка! Статус 0 означает блок сети или CORS");
+                                    rootLayout.thumbSource = "qrc:/images/error-icon.png"; // Заглушка
+                                    timercheckUrl.mode = 1;
+                                    // timercheckUrl.start()
+                                    rootLayout.checkingUrl = false
+                                }
                             }
                         }
                     };
@@ -322,13 +393,13 @@ ApplicationWindow  {
                         id: pathModel
 
                         ListElement {
-                            filePath: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
-                        }
-                        ListElement {
                             filePath: "https://stream.mux.com/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8"
                         }
                         ListElement {
                             filePath: "https://xxx.xxx.xxx.xx/hls/xxx/xxx.m3u8?uuid=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&token=xxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        }
+                        ListElement {
+                            filePath: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
                         }
                     }// Источник путей к файлам
 
@@ -336,19 +407,26 @@ ApplicationWindow  {
                                     spacing: 10
 
                                     Image {
+                                        id: thumb
                                         width: 160; height: 90
                                         fillMode: Image.PreserveAspectCrop
                                         asynchronous: true
                                         cache: false
 
                                         // Формируем путь: префикс + путь к файлу
-                                        source: "image://thumb/" + filePath
+                                        source: "image://async_provider/"  + filePath //"image://thumb/" + filePath
 
                                         // Опционально: пока грузится превью, покажем серый фон
                                         Rectangle {
                                             anchors.fill: parent
                                             color: "#333"
                                             visible: parent.status != Image.Ready
+                                        }
+
+                                        // Индикатор загрузки, пока идет проверка или генерация
+                                        BusyIndicator {
+                                            anchors.centerIn: parent
+                                            running: thumb.status === Image.Loading
                                         }
 
                                         // запускать воспроизведение
