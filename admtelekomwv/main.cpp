@@ -2,7 +2,6 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 // #include <QtWebView>
-#include "thumbnailprovider.h"
 #include <asyncImageprovider.h>
 
 int main(int argc, char *argv[])
@@ -10,6 +9,11 @@ int main(int argc, char *argv[])
     // QtWebView::initialize();
 
     QGuiApplication app(argc, argv);
+
+    // Совет: Если у вас список из 20 видео, QThreadPool может попытаться запустить 4-8 захватов одновременно.
+    // На мобильном устройстве это может привести к нехватке памяти или перегреву.
+    // Решение: Ограничьте количество одновременно работающих потоков в пуле для задач превью:
+    QThreadPool::globalInstance()->setMaxThreadCount(qMax(2, QThread::idealThreadCount() / 2));
 
     // 1. Load dependencies in the correct order via the Java layer
     // This will automatically call JNI_OnLoad and install s_jvm in VLC

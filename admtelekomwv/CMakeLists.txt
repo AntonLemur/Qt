@@ -7,6 +7,7 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_FIND_DEBUG_MODE ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Quick WebView Multimedia WebSockets GuiPrivate)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent)
 
 set(VLC_PATH "/home/anton/Projects/Qt/admtelekomwv/VLC")
 
@@ -75,7 +76,7 @@ set_target_properties(appadmtelekomwv PROPERTIES
 target_include_directories(appadmtelekomwv PRIVATE "VLC/include")
 target_link_directories(appadmtelekomwv PRIVATE "VLC/lib/arm64-v8a")
 
-target_link_libraries(appadmtelekomwv PRIVATE Qt6::Quick Qt6::WebView Qt6::Multimedia Qt6::WebSockets Qt6::GuiPrivate
+target_link_libraries(appadmtelekomwv PRIVATE Qt6::Quick Qt6::WebView Qt6::Multimedia Qt6::WebSockets Qt6::GuiPrivate Qt6::Concurrent
     vlc
     vlcjni
     mla

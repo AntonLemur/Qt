@@ -3,6 +3,11 @@
 
 #include <vlc/vlc.h>
 #include <QObject>
+#include <QDir>
+#include <QFileInfo>
+#include <QDateTime>
+#include <QStandardPaths>
+#include <QtConcurrent>
 
 class VlcManager {
 public:
@@ -26,10 +31,38 @@ private:
             "--rtsp-frame-buffer-size=100000" // Увеличить размер системного буфера для UDP пакетов
         };
         m_vlc = libvlc_new(0, nullptr); //libvlc_new(3, vlc_args);
+
+        (void)QtConcurrent::run([this](){
+            cleanOldThumbnails(30);
+        });
     }
 
     ~VlcManager() {
         if (m_vlc) libvlc_release(m_vlc);
+    }
+
+    // очистка кэша
+    void cleanOldThumbnails(int daysLimit = 7) {
+        // Получаем путь к папке с кэшем миниатюр
+        QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/thumbs/";
+        QDir dir(cacheDir);
+
+        if (!dir.exists()) return;
+
+        // Получаем текущую дату и время
+        QDateTime now = QDateTime::currentDateTime();
+
+        // Перебираем все файлы в папке
+        QFileInfoList files = dir.entryInfoList(QDir::Files);
+        for (const QFileInfo &fileInfo : std::as_const(files)/*чтоб не копировал*/) {
+            // Вычисляем возраст файла в днях
+            qint64 ageInDays = fileInfo.lastModified().daysTo(now);
+
+            if (ageInDays > daysLimit) {
+                QFile::remove(fileInfo.absoluteFilePath());
+                // qDebug() << "Удалена старая миниатюра:" << fileInfo.fileName();
+            }
+        }
     }
 
     libvlc_instance_t *m_vlc = nullptr;

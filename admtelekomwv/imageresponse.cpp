@@ -1,6 +1,9 @@
 #include <imageresponse.h>
-#include "vlcmanager.h"
 #include <QTimer>
+#include <QStandardPaths>
+#include <QDir>
+#include <QCryptographicHash>
+#include "vlcmanager.h"
 
 MyImageResponse::MyImageResponse(const QString &id, const QSize &requestedSize)
     : m_id(id), m_requestedSize(requestedSize) {
@@ -10,9 +13,40 @@ MyImageResponse::MyImageResponse(const QString &id, const QSize &requestedSize)
 void MyImageResponse::run() {
     // Имитация тяжелой работы или загрузки
     QString videoPath = m_id;
-    QString tempImg; // = QDir::tempPath() + "/thumb_" + QString::number(qHash(videoPath)) + ".png";
 
-    QImage image = getFrameFromUrl(videoPath); //getVlcThumbnail(videoPath, tempImg);
+    bool isStream = videoPath.endsWith(".m3u8") || videoPath.startsWith("rtsp://");
+    QString cachePath;
+
+    if(!isStream)
+    {
+        // 1. Создаем уникальное имя файла на основе хэша URL
+        QString hash = QString(QCryptographicHash::hash(videoPath.toUtf8(), QCryptographicHash::Md5).toHex());
+        QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/thumbs/";
+        QDir().mkpath(cacheDir);
+        cachePath = cacheDir + hash + ".png";
+
+        // 2. Проверяем, есть ли уже такая картинка на диске
+        if (QFile::exists(cachePath)) {
+            QImage cachedImg(cachePath);
+            if (!cachedImg.isNull()) {
+                m_requestedSize = cachedImg.size();
+                // Обязательно масштабируйте до requestedSize, если он задан!
+                if (m_requestedSize.isValid()) {
+                    cachedImg = cachedImg.scaled(m_requestedSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                }
+                m_image = cachedImg;
+                emit finished(); // Сигнализируем QML, что картинка готова
+            }
+        }
+    }
+
+    // 3. Если кэша нет, запускаем LibVLC
+    QImage image = getFrameFromUrl(videoPath);
+
+    // 4. Сохраняем результат в кэш для следующего раза
+    if (!image.isNull() && isStream) {
+        image.save(cachePath, "PNG");
+    }
 
     // Обязательно масштабируйте до requestedSize, если он задан!
     if (m_requestedSize.isValid()) {
@@ -23,108 +57,12 @@ void MyImageResponse::run() {
     emit finished(); // Сигнализируем QML, что картинка готова
 }
 
-
 QQuickTextureFactory* MyImageResponse::textureFactory() const {
     return QQuickTextureFactory::textureFactoryForImage(m_image);
 }
 
-// QImage MyImageResponse::getVlcThumbnail(QString videoPath, QString tempPath)
-// {
-//     const int width = 640;  // Фиксируем размер превью для скорости
-//     const int height = 360;
-
-//     libvlc_instance_t *vlc = VlcManager::instance();//libvlc_new(3, vlc_args);
-//     libvlc_media_t *m = libvlc_media_new_location(vlc, videoPath.toUtf8().constData());
-
-//     libvlc_media_add_option(m, ":no-audio");
-//     libvlc_media_add_option(m, ":no-video-title-show");
-//     libvlc_media_add_option(m, ":avcodec-hw=none");
-//     libvlc_media_add_option(m, ":network-caching=3000"); // 3 секунды буфера для сети
-//     libvlc_media_add_option(m, ":no-hw-dec");
-//     libvlc_media_add_option(m, ":vout=vmem");
-
-//     libvlc_media_player_t *mp = libvlc_media_player_new_from_media(m);
-
-//     QImage result(width, height, QImage::Format_RGB32);
-//     QEventLoop loop;
-//     MyContext ctx { result.bits(), &loop, false };
-
-//     // Настраиваем VLC на рисование в память (формат RV32 = RGBA)
-//     libvlc_video_set_format(mp, "RV32", width, height, width * 4);
-//     libvlc_video_set_callbacks(mp, &MyImageResponse::lock, &MyImageResponse::unlock, nullptr, &ctx);
-
-//     ctx.canCapture = false; // Добавьте этот флаг в структуру MyContext
-//     libvlc_media_player_play(mp);
-
-//     if (videoPath.endsWith(".mp4", Qt::CaseInsensitive)) {
-//         // Ждем, пока плеер реально начнет играть (до 5 секунд)
-//         int waitReady = 50;
-//         while (libvlc_media_player_get_state(mp) < libvlc_Playing && waitReady-- > 0) {
-//             QThread::msleep(100);
-//         }
-
-//         // Теперь прыжок сработает точно
-//         QThread::msleep(5000);
-//         libvlc_media_player_set_time(mp, 2000); // Прыгаем на 2-ю секунду (там обычно уже нет черного кадра)
-//     }
-//     else
-//         QThread::msleep(300);
-
-//     // Ждем кадра 10 секунд (для сети)
-//     QTimer::singleShot(10000, &loop, &QEventLoop::quit);
-//     ctx.canCapture = true; // Разрешаем захват только ТЕПЕРЬ
-//     loop.exec();
-
-//     // 1. Обязательно отключаем колбэки ПЕРЕД остановкой
-//     // Это гарантирует, что VLC не вызовет lock/unlock, пока mp->stop() разрушает потоки
-//     libvlc_video_set_callbacks(mp, nullptr, nullptr, nullptr, nullptr);
-
-//     libvlc_media_player_stop(mp);
-
-//     // КРИТИЧНО: Даем VLC время реально остановить потоки, прежде чем функция выйдет
-//     // и ctx на стеке уничтожится.
-//     QThread::msleep(200);
-
-//     // QImage result;
-//     if (ctx.frameCaptured) {
-//         return result;
-//     }
-
-//     libvlc_media_player_release(mp);
-//     libvlc_media_release(m);
-
-//     return QImage(nullptr); //result;
-// }
-
-// // Callback: VLC спрашивает, куда рисовать
-// void* MyImageResponse::lock(void* data, void** planes) {
-//     MyContext* ctx = static_cast<MyContext*>(data);
-//     *planes = ctx->buffer; // Отдаем адрес нашего массива
-//     return nullptr;
-// }
-
-// // Callback: Кадр отрисован в память
-// void MyImageResponse::unlock(void* data, void*, void* const*) {
-//     MyContext* ctx = static_cast<MyContext*>(data);
-//     // Захватываем кадр, только если мы разрешили (после msleep в основном потоке)
-//     if (ctx && ctx->canCapture && !ctx->frameCaptured) {
-//         ctx->frameCaptured = true;
-//         // Безопасный выход из цикла
-//         ctx->loop->quit();
-//         // QMetaObject::invokeMethod(ctx->loop, "quit", Qt::QueuedConnection);
-//     }
-// }
-
 QImage MyImageResponse::getFrameFromUrl(QString url) {
-    // libvlc_instance_t* inst = VlcManager::instance();
-    const char* const vlc_args[] = {
-                                    "--vout=vmem",
-                                    "--avcodec-hw=none",
-                                    "--no-audio",
-                                    "--no-video-title-show",
-                                    "--ignore-config"
-    };
-    libvlc_instance_t* inst =  libvlc_new(0, nullptr); //libvlc_new(5, vlc_args);
+    libvlc_instance_t* inst = VlcManager::instance();
 
     libvlc_media_t* m = libvlc_media_new_location(inst, url.toUtf8().data());
     libvlc_media_add_option(m, ":vout=vmem");
@@ -132,6 +70,7 @@ QImage MyImageResponse::getFrameFromUrl(QString url) {
     libvlc_media_add_option(m, ":no-osd");
     libvlc_media_add_option(m, ":avcodec-hw=none");
     libvlc_media_add_option(m, ":no-video-title-show");
+    libvlc_media_add_option(m, ":ignore-config");
 
     // libvlc_media_add_option(m, ":network-caching=3000"); // Даем 1.5 сек на буфер
     // libvlc_media_add_option(m, ":no-hwdec");            // Еще раз запрещаем железо
@@ -177,7 +116,7 @@ QImage MyImageResponse::getFrameFromUrl(QString url) {
         if (url.endsWith(".mp4", Qt::CaseInsensitive)) {
 
             VlcSyncContext sync;
-            sync.targetPosition = 0.5f; // Мы хотим прыгнуть на середину
+            sync.targetPosition = 0.1f; // Мы хотим прыгнуть на середину
 
             // Получаем менеджер событий плеера
             libvlc_event_manager_t* em = libvlc_media_player_event_manager(mp);
@@ -216,6 +155,8 @@ QImage MyImageResponse::getFrameFromUrl(QString url) {
             // Не забываем отписаться в конце
             libvlc_event_detach(em, libvlc_MediaPlayerPositionChanged, &MyImageResponse::vlc_callback, &sync);
         } else {
+            // Сбрасываем флаг перед перемоткой
+            ctx.frameCaptured = false;
             // Для live-потоков просто ждем первый стабильный кадр
             for(int i = 0; i < 100 && !ctx.frameCaptured; ++i) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -243,7 +184,6 @@ QImage MyImageResponse::getFrameFromUrl(QString url) {
     }
 
     libvlc_media_player_release(mp);
-    libvlc_release(inst);
 
     return finalImg;
 }
@@ -267,7 +207,7 @@ void MyImageResponse::vlc_callback(const libvlc_event_t* event, void* data) {
     if (event->type == libvlc_MediaPlayerPositionChanged) {
         float newPos = event->u.media_player_position_changed.new_position;
         // Если новая позиция близка к целевой (с учетом погрешности)
-        if (std::abs(newPos - sync->targetPosition) < 0.05f) {
+        if (std::abs(newPos - sync->targetPosition) < 0.005f) {
             sync->seekFinished = true;
         }
     }
